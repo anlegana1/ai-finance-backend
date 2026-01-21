@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import SQLModel, Field, Session, select
 from pydantic import EmailStr
 
@@ -104,6 +105,29 @@ def login(payload: LoginIn, session: Session = Depends(get_session)):
         )
 
     # Include subject as user id and optionally email
+    token = create_access_token({"sub": str(user.id), "email": user.email})
+    return TokenOut(access_token=token, token_type="bearer")
+
+
+@router.post(
+    "/token",
+    response_model=TokenOut,
+    status_code=status.HTTP_200_OK,
+)
+def token(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
+    # OAuth2PasswordRequestForm usa 'username' como el campo de email
+    email_norm = form_data.username.strip().lower()
+    if any(c.isspace() for c in form_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña no debe contener espacios",
+        )
+    user = session.exec(select(User).where(User.email == email_norm)).first()
+    if user is None or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
     token = create_access_token({"sub": str(user.id), "email": user.email})
     return TokenOut(access_token=token, token_type="bearer")
 

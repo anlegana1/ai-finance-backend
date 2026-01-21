@@ -5,3 +5,5 @@ psycopg2-binary
 python-dotenv
 passlib[bcrypt]
 python-jose
+email-validator
+python-multipart
