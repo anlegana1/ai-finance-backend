@@ -42,7 +42,7 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
 def get_current_user(
