@@ -3,6 +3,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import SQLModel, Field, Session, select
+from pydantic import EmailStr
 
 from ..database import get_session
 from ..models.user import User
@@ -17,7 +18,7 @@ router = APIRouter(
 
 
 class RegisterIn(SQLModel):
-    email: str = Field(index=False)
+    email: EmailStr = Field(index=False)
     password: str = Field(min_length=6)
 
 
@@ -37,8 +38,13 @@ def register_user(
     payload: RegisterIn,
     session: Session = Depends(get_session),
 ):
-    # Validar que el email no exista
-    exists_stmt = select(User).where(User.email == payload.email)
+    if any(c.isspace() for c in payload.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña no debe contener espacios",
+        )
+    email_norm = payload.email.strip().lower()
+    exists_stmt = select(User).where(User.email == email_norm)
     existing = session.exec(exists_stmt).first()
     if existing is not None:
         raise HTTPException(
@@ -49,7 +55,7 @@ def register_user(
     now = datetime.utcnow()
     user = User(
         id=uuid.uuid4(),
-        email=payload.email,
+        email=email_norm,
         hashed_password=hash_password(payload.password),
         created_at=now,
         updated_at=now,
@@ -68,7 +74,7 @@ def register_user(
 
 
 class LoginIn(SQLModel):
-    email: str
+    email: EmailStr
     password: str
 
 
@@ -83,7 +89,13 @@ class TokenOut(SQLModel):
     status_code=status.HTTP_200_OK,
 )
 def login(payload: LoginIn, session: Session = Depends(get_session)):
-    stmt = select(User).where(User.email == payload.email)
+    if any(c.isspace() for c in payload.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña no debe contener espacios",
+        )
+    email_norm = payload.email.strip().lower()
+    stmt = select(User).where(User.email == email_norm)
     user = session.exec(stmt).first()
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
