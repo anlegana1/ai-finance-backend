@@ -30,13 +30,14 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, stored: str) -> bool:
     try:
+        stored = stored.strip()
         algorithm, salt_hex, hash_hex = stored.split("$")
         if algorithm != ALGORITHM:
             return False
         salt = bytes.fromhex(salt_hex)
         expected = bytes.fromhex(hash_hex)
         candidate = _pbkdf2_hash(password, salt)
-        return hashlib.compare_digest(candidate, expected)
+        return candidate == expected
     except Exception:
         return False
 
