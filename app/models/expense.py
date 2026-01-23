@@ -19,6 +19,7 @@ class Expense(SQLModel, table=True):
     description: str
     category: str = Field(default="OTHER", max_length=50)
     expense_date: date = Field(default_factory=date.today)
+    receipt_path: Optional[str] = Field(default=None)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
