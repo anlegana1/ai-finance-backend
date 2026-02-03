@@ -57,7 +57,7 @@ class ReceiptConfirmItem(SQLModel):
     currency: str = Field(default="CAD", min_length=3, max_length=3, regex="^[A-Z]{3}$")
     description: str = Field(min_length=1, max_length=255)
     category: str = Field(default="OTHER", min_length=1, max_length=50)
-    expense_date: Optional[date] = Field(default=None, le=date.today())
+    expense_date: Optional[date] = Field(default=None)
 
 
 class ReceiptConfirmIn(SQLModel):
@@ -475,7 +475,13 @@ def confirm_receipt(
     now = datetime.utcnow()
     created: List[Expense] = []
 
-    for item in payload.expenses:
+    print(f"=== DEBUG /receipts/confirm ===")
+    print(f"Received {len(payload.expenses)} expenses")
+    
+    for idx, item in enumerate(payload.expenses, 1):
+        final_date = item.expense_date or date.today()
+        print(f"Expense {idx}: received_date={item.expense_date}, final_date={final_date}, desc={item.description}")
+        
         expense = Expense(
             id=uuid.uuid4(),
             user_id=current_user.id,
@@ -483,7 +489,7 @@ def confirm_receipt(
             currency=item.currency,
             description=item.description,
             category=item.category,
-            expense_date=item.expense_date or date.today(),
+            expense_date=final_date,
             receipt_path=str(path.as_posix()),
             created_at=now,
             updated_at=now,
@@ -491,6 +497,8 @@ def confirm_receipt(
         )
         session.add(expense)
         created.append(expense)
+    
+    print(f"================================")
 
     for attempt in range(3):
         try:
