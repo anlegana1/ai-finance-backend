@@ -505,9 +505,6 @@ def confirm_receipt(
                 )
             time.sleep(0.25 * (attempt + 1))
 
-    for exp in created:
-        session.refresh(exp)
-
     created_out = [
         ExpenseRead(
             id=exp.id,
