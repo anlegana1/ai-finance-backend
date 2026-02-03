@@ -7,5 +7,8 @@ passlib[bcrypt]
 python-jose
 email-validator
 python-multipart
-pillow 
+pillow
 pytesseract
+langchain
+langchain-openai
+opencv-python
