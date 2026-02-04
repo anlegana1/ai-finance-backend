@@ -20,10 +20,10 @@ REST API for intelligent expense management with JWT authentication, OCR receipt
 - **FastAPI** - Modern, high-performance web framework
 - **SQLModel** - ORM with integrated Pydantic validation
 - **Tesseract OCR** - Text extraction from images
-- **OpenAI API** - Intelligent classification with GPT
-- **OpenCV** - Image preprocessing
+- **LangChain + OpenAI** - AI-powered expense categorization with GPT-3.5
+- **OpenCV** - Image preprocessing and enhancement
 - **JWT + Bcrypt** - Authentication and security
-- **SQLite** - Lightweight relational database
+- **SQLite/PostgreSQL** - Lightweight relational database
 - **Python 3.11+** - Base language
 
 ---
@@ -199,6 +199,58 @@ Cross-cutting functionalities:
 - `get_session()` - Dependency injection
 - `init_db()` - Automatic table creation
 
+#### 5. **LangChain Integration** (`app/routers/receipts.py`)
+
+We use LangChain as a wrapper around OpenAI's API for intelligent expense categorization:
+
+**Purpose:**
+- Automatically classify expense descriptions into predefined categories
+- Process single or batch expenses efficiently
+- Provide structured prompts to GPT-3.5-turbo
+
+**Implementation:**
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+# Initialize LLM
+llm = ChatOpenAI(
+    model="gpt-3.5-turbo",
+    api_key=openai_api_key,
+    temperature=0
+)
+
+# Create prompt template
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are an expense categorizer..."),
+    ("human", "Classify: {descriptions}")
+])
+
+# Chain prompt with LLM
+chain = prompt | llm
+result = chain.invoke({"descriptions": expense_descriptions})
+```
+
+**Categories Supported:**
+- `FOOD` - Restaurants and food delivery
+- `GROCERIES` - Supermarket purchases
+- `TRANSPORT` - Gas, public transit, parking
+- `ENTERTAINMENT` - Movies, games, subscriptions
+- `HEALTH` - Pharmacy, medical services
+- `UTILITIES` - Bills (electricity, water, internet)
+- `RENT` - Housing payments
+- `OTHER` - Miscellaneous expenses
+
+**Functions:**
+- `classify_category_with_ai(description)` - Single expense classification
+- `classify_multiple_with_ai(descriptions_list)` - Batch classification (more efficient)
+
+**Why LangChain?**
+- Cleaner, more maintainable code than raw OpenAI API calls
+- Built-in prompt templates and chaining
+- Easy to swap LLM providers if needed
+- Structured output parsing
+
 ---
 
 ## 🔄 Backend Workflow
@@ -266,10 +318,13 @@ Client → POST /receipts/process (multipart/form-data)
            │    ├─ Assigns default currency: CAD
            │    └─ Creates list of ReceiptExpenseItem
            │
-           ├─ 7. AI CLASSIFICATION (OpenAI)
-           │    ├─ Sends descriptions to GPT-3.5
+           ├─ 7. AI CLASSIFICATION (LangChain + OpenAI)
+           │    ├─ Uses LangChain ChatOpenAI wrapper
+           │    ├─ Creates ChatPromptTemplate with system message
+           │    ├─ Sends descriptions to GPT-3.5-turbo
            │    ├─ Prompt: "Classify into categories"
            │    ├─ Categories: FOOD, GROCERIES, TRANSPORT, etc.
+           │    ├─ LangChain chains: prompt | llm
            │    ├─ Parses JSON response
            │    └─ Maps categories to each item
            │
@@ -679,9 +734,39 @@ For better results:
 # backend/.env
 DATABASE_URL=postgresql://user:password@localhost/financedb
 
-# Install driver
+# Install driver (already in requirements.txt)
 pip install psycopg2-binary
 ```
+
+### Deploying to Render
+
+This project includes a custom `build.sh` script to install system dependencies on Render.
+
+**build.sh** installs:
+- `tesseract-ocr` - OCR engine
+- `tesseract-ocr-eng` - English language pack
+- `tesseract-ocr-spa` - Spanish language pack
+- All Python dependencies from `requirements.txt`
+
+**Render Configuration:**
+```bash
+# Build Command (in Render Dashboard):
+chmod +x build.sh && ./build.sh
+
+# Start Command:
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+# Environment Variables required:
+OPENAI_API_KEY=sk-your-key
+SECRET_KEY=your-jwt-secret
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+TESSERACT_CMD=/usr/bin/tesseract
+DATABASE_URL=postgresql://...supabase.com:6543/postgres
+FRONTEND_URL=https://your-frontend.vercel.app
+```
+
+**Note:** `build.sh` uses `apt-get` to install system packages. This only works on Render's Ubuntu-based environment. For local development, install Tesseract manually as described in the Installation section above.
 
 ---
 
