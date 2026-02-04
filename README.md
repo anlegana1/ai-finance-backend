@@ -768,11 +768,11 @@ SECRET_KEY=your-jwt-secret
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 TESSERACT_CMD=/usr/bin/tesseract
-DATABASE_URL=postgresql://...pooler.supabase.com:6543/postgres
+DATABASE_URL=yourpoolersupabaseutl
 FRONTEND_URL=https://your-frontend.vercel.app
 ```
 
-**Important:** `packages.txt` must be in the **repository root**, not in the `backend/` folder. Render detects it automatically regardless of your Root Directory setting.
+**Important:** `packages.txt` must be in the **repository root**
 
 ---
 
