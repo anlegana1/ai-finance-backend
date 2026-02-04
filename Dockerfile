@@ -23,5 +23,9 @@ COPY . .
 # Expose port (Render will inject $PORT)
 EXPOSE 10000
 
-# Start command - use shell form for variable expansion
-CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT
+# Copy and set permissions for start script
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
+# Use start script as entrypoint
+CMD ["/start.sh"]
