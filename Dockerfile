@@ -23,5 +23,5 @@ COPY . .
 # Expose port (Render will inject $PORT)
 EXPOSE 10000
 
-# Start command
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}
+# Start command - use shell form for variable expansion
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT
