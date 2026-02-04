@@ -740,21 +740,27 @@ pip install psycopg2-binary
 
 ### Deploying to Render
 
-This project includes a custom `build.sh` script to install system dependencies on Render.
+This project uses a `packages.txt` file (in repository root) to install system dependencies on Render.
 
-**build.sh** installs:
-- `tesseract-ocr` - OCR engine
-- `tesseract-ocr-eng` - English language pack
-- `tesseract-ocr-spa` - Spanish language pack
-- All Python dependencies from `requirements.txt`
+**packages.txt** (repository root) contains:
+```
+tesseract-ocr
+tesseract-ocr-eng
+tesseract-ocr-spa
+```
+
+Render automatically detects and installs these packages before building your application.
 
 **Render Configuration:**
 ```bash
 # Build Command (in Render Dashboard):
-chmod +x build.sh && ./build.sh
+pip install -r requirements.txt
 
 # Start Command:
 uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+# Root Directory:
+backend
 
 # Environment Variables required:
 OPENAI_API_KEY=sk-your-key
@@ -762,11 +768,11 @@ SECRET_KEY=your-jwt-secret
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 TESSERACT_CMD=/usr/bin/tesseract
-DATABASE_URL=postgresql://...supabase.com:6543/postgres
+DATABASE_URL=postgresql://...pooler.supabase.com:6543/postgres
 FRONTEND_URL=https://your-frontend.vercel.app
 ```
 
-**Note:** `build.sh` uses `apt-get` to install system packages. This only works on Render's Ubuntu-based environment. For local development, install Tesseract manually as described in the Installation section above.
+**Important:** `packages.txt` must be in the **repository root**, not in the `backend/` folder. Render detects it automatically regardless of your Root Directory setting.
 
 ---
 
