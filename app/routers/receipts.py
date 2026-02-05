@@ -422,7 +422,18 @@ def process_receipt(
     receipt_path = str(save_path.as_posix())
 
     ocr_text = _ocr_image(save_path)
+    try:
+        ocr_lines = [ln for ln in (ocr_text or "").splitlines() if ln.strip()]
+        print("=== DEBUG: OCR TEXT STATS ===")
+        print(f"ocr_len={len(ocr_text or '')} nonempty_lines={len(ocr_lines)}")
+        preview = (ocr_text or "").replace("\r", "")[:600]
+        print("ocr_preview_start=\n" + preview)
+        print("=== DEBUG: OCR TEXT STATS END ===")
+    except Exception as e:
+        print(f"=== DEBUG: OCR TEXT STATS FAILED: {e} ===")
+
     items = _parse_receipt_locally(ocr_text)
+    print(f"=== DEBUG: PARSED ITEMS COUNT: {len(items)} ===")
     category_map = _classify_categories([i.description for i in items])
     for item in items:
         item.category = category_map.get(item.description, "OTHER")
