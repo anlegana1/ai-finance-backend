@@ -219,8 +219,14 @@ def _parse_receipt_locally(ocr_text: str) -> List[ReceiptExpenseItem]:
 
     # Prefer line-by-line parsing (more reliable for repeated items).
     line_pattern = re.compile(
-        r"^(?P<qty>\d{1,2})\s+(?P<desc>.+?)\s*(?P<amt>\d{1,6}[\,\.]\d{2})\s*$"
+        r"^"  # start
+        r"[^A-Za-z0-9]*"  # allow leading OCR junk like '~', '+', etc.
+        r"(?:(?P<qty>\d{1,2})\s+)?"  # qty is optional in some OCR outputs
+        r"(?P<desc>.+?)"  # description
+        r"\s*(?P<amt>\d{1,6}\s*[\,\.]\s*\d{2})\s*$"  # amount, allow spaces around separator
     )
+
+    _leading_junk_desc = re.compile(r"^[^A-Za-z0-9]+\s*")
 
     def _is_noise(desc: str) -> bool:
         u = desc.upper()
@@ -259,10 +265,11 @@ def _parse_receipt_locally(ocr_text: str) -> List[ReceiptExpenseItem]:
             continue
 
         desc = " ".join((m.group("desc") or "").strip().split())
+        desc = _leading_junk_desc.sub("", desc).strip()
         if not desc or _is_noise(desc):
             continue
 
-        amt_s = (m.group("amt") or "").replace(",", ".")
+        amt_s = (m.group("amt") or "").replace(" ", "").replace(",", ".")
         try:
             amount = float(amt_s)
         except Exception:
