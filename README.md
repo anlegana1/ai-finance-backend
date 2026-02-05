@@ -272,10 +272,10 @@ Client → POST /auth/login
            ├─ Verifies password with bcrypt
            ├─ Generates JWT token (30 min)
            │  └─ Payload: {sub: user_id, email}
-           └─ Returns: {access_token, token_type}
+           └─ Sets HttpOnly cookie: access_token=<jwt>
            
 Client → Subsequent requests
-           └─ Header: Authorization: Bearer <token>
+           └─ Browser sends cookie automatically (credentials: include)
 ```
 
 ### 2. Receipt Processing Pipeline
@@ -447,7 +447,7 @@ Creates new user account.
 ---
 
 #### `POST /auth/login`
-Login and obtain JWT token.
+Login and set an HttpOnly cookie (no token is returned in the JSON response).
 
 **Request:**
 ```json
@@ -460,13 +460,40 @@ Login and obtain JWT token.
 **Response:** `200 OK`
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "user@example.com",
+  "created_at": "2026-02-03T20:00:00",
+  "updated_at": "2026-02-03T20:00:00"
 }
 ```
 
+**Cookie:**
+- `Set-Cookie: access_token=<jwt>; HttpOnly; Secure; SameSite=None`
+
 **Errors:**
 - `401` - Invalid email or password
+
+---
+
+#### `GET /auth/me`
+Returns the current authenticated user (used by the frontend to confirm session when using HttpOnly cookies).
+
+**Response:** `200 OK`
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "user@example.com",
+  "created_at": "2026-02-03T20:00:00",
+  "updated_at": "2026-02-03T20:00:00"
+}
+```
+
+---
+
+#### `POST /auth/logout`
+Clears the auth cookie.
+
+**Response:** `204 No Content`
 
 ---
 
