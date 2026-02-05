@@ -75,15 +75,15 @@ def _ocr_image(image_path: Path) -> str:
         import pytesseract
         import cv2
         import numpy as np
-
-        tess_cmd = os.getenv("TESSERACT_CMD")
-        if tess_cmd:
-            pytesseract.pytesseract.tesseract_cmd = tess_cmd
-    except Exception:
+    except ImportError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="OCR dependencies missing. Install 'pytesseract' and 'opencv-python', and Tesseract OCR runtime.",
+            detail=f"OCR dependencies missing: {str(e)}. Install 'pytesseract' and 'opencv-python', and Tesseract OCR runtime.",
         )
+
+    tess_cmd = os.getenv("TESSERACT_CMD")
+    if tess_cmd:
+        pytesseract.pytesseract.tesseract_cmd = tess_cmd
 
     try:
         img = cv2.imread(str(image_path))
