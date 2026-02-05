@@ -62,7 +62,7 @@ class OCRRead(SQLModel):
 # ─────────────────────────────
 
 @router.post(
-    "/",
+    "",
     response_model=ExpenseRead,
     status_code=status.HTTP_201_CREATED,
 )
@@ -153,7 +153,7 @@ def ocr_receipt(
 
 
 @router.get(
-    "/",
+    "",
     response_model=List[ExpenseRead],
 )
 def list_expenses(
