@@ -217,22 +217,86 @@ def _parse_receipt_with_llm(ocr_text: str) -> List[ReceiptExpenseItem]:
 def _parse_receipt_locally(ocr_text: str) -> List[ReceiptExpenseItem]:
     text = ocr_text.replace("\u00a0", " ")
 
-    pattern = re.compile(
-        r"\b(\d+)\s+([A-Za-z0-9\-\_ ]{3,}?)\s*(\d{1,4})\s*[,\.\s]\s*(\d{2})\b"
+    # Prefer line-by-line parsing (more reliable for repeated items).
+    line_pattern = re.compile(
+        r"^(?P<qty>\d{1,2})\s+(?P<desc>.+?)\s*(?P<amt>\d{1,6}[\,\.]\d{2})\s*$"
     )
 
+    def _is_noise(desc: str) -> bool:
+        u = desc.upper()
+        return any(
+            k in u
+            for k in [
+                "TOTAL",
+                "SUBTOTAL",
+                "PROPINA",
+                "TIP",
+                "GRAT",
+                "IVA",
+                "IMPUEST",
+                "TAX",
+                "CAMBIO",
+                "VUELTO",
+                "EFECTIVO",
+                "TARJETA",
+                "CARD",
+                "PAGO",
+                "PAY",
+                "ORDEN",
+                "MESA",
+            ]
+        )
+
     items: List[ReceiptExpenseItem] = []
-    for match in pattern.finditer(text):
-        qty_s, desc_raw, amount_int_s, amount_dec_s = match.groups()
-        desc = " ".join(desc_raw.strip().split())
-        if not desc:
+
+    for raw_line in text.splitlines():
+        line = " ".join(raw_line.strip().split())
+        if not line:
             continue
 
+        m = line_pattern.match(line)
+        if not m:
+            continue
+
+        desc = " ".join((m.group("desc") or "").strip().split())
+        if not desc or _is_noise(desc):
+            continue
+
+        amt_s = (m.group("amt") or "").replace(",", ".")
+        try:
+            amount = float(amt_s)
+        except Exception:
+            continue
+        if amount <= 0:
+            continue
+
+        items.append(
+            ReceiptExpenseItem(
+                amount=amount,
+                currency="CAD",
+                description=desc,
+                category="OTHER",
+                expense_date=None,
+            )
+        )
+
+    # Fallback: if we didn't parse anything, try a global regex over the whole text.
+    if items:
+        return items
+
+    global_pattern = re.compile(
+        r"\b(\d{1,2})\s+([A-Za-zÀ-ÿ0-9\-\_ ]{3,}?)\s*(\d{1,6})\s*[\,\.\s]\s*(\d{2})\b"
+    )
+
+    for match in global_pattern.finditer(text):
+        _qty_s, desc_raw, amount_int_s, amount_dec_s = match.groups()
+        desc = " ".join(desc_raw.strip().split())
+        if not desc or _is_noise(desc):
+            continue
         try:
             amount = float(f"{int(amount_int_s)}.{int(amount_dec_s):02d}")
         except Exception:
             continue
-
         if amount <= 0:
             continue
 
