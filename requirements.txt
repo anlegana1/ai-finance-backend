@@ -11,4 +11,4 @@ pillow
 pytesseract
 langchain
 langchain-openai
-opencv-python
+opencv-python-headless
