@@ -3,7 +3,7 @@ import os
 from typing import Tuple
 import uuid
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
 from jose.exceptions import ExpiredSignatureError, JWTError
@@ -42,11 +42,12 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
     session: Session = Depends(get_session),
 ) -> User:
     # Default response for invalid tokens
@@ -56,6 +57,12 @@ def get_current_user(
             detail=detail,
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    if not token:
+        token = request.cookies.get("access_token")
+
+    if not token:
+        _raise_invalid("Not authenticated")
 
     try:
         payload = decode_access_token(token)

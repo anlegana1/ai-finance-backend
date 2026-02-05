@@ -1,15 +1,16 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import SQLModel, Field, Session, select
 from pydantic import EmailStr
 
 from ..database import get_session
 from ..models.user import User
-from ..core.security import hash_password, verify_password
+from ..core.security import get_current_user, hash_password, verify_password
 from ..core.jwt import create_access_token
+from ..config import settings
 
 
 router = APIRouter(
@@ -86,10 +87,10 @@ class TokenOut(SQLModel):
 
 @router.post(
     "/login",
-    response_model=TokenOut,
+    response_model=UserRead,
     status_code=status.HTTP_200_OK,
 )
-def login(payload: LoginIn, session: Session = Depends(get_session)):
+def login(payload: LoginIn, response: Response, session: Session = Depends(get_session)):
     if any(c.isspace() for c in payload.password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -106,7 +107,44 @@ def login(payload: LoginIn, session: Session = Depends(get_session)):
 
     # Include subject as user id and optionally email
     token = create_access_token({"sub": str(user.id), "email": user.email})
-    return TokenOut(access_token=token, token_type="bearer")
+
+    # Store token in HttpOnly cookie to avoid exposing it to JS/localStorage
+    # In production (cross-site Vercel -> Render), we need SameSite=None and Secure.
+    is_prod = settings.environment.lower() == "production"
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=is_prod,
+        samesite="none" if is_prod else "lax",
+        max_age=60 * 60 * 24 * 7,
+        path="/",
+    )
+
+    return UserRead(id=user.id, email=user.email, created_at=user.created_at, updated_at=user.updated_at)
+
+
+@router.get(
+    "/me",
+    response_model=UserRead,
+    status_code=status.HTTP_200_OK,
+)
+def me(current_user: User = Depends(get_current_user)):
+    return UserRead(
+        id=current_user.id,
+        email=current_user.email,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at,
+    )
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def logout(response: Response):
+    response.delete_cookie(key="access_token", path="/")
+    return None
 
 
 @router.post(
