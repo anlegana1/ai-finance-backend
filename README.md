@@ -12,7 +12,7 @@ REST API for intelligent expense management with JWT authentication, OCR receipt
 - 📊 **Full CRUD** - Complete expense management per user
 - 🔍 **Validation** - Pydantic data validation
 - 📝 **Auto Docs** - Swagger UI and ReDoc included
-- 💱 **User Default Currency** - Per-user `default_currency` preference returned by auth endpoints
+
 
 ---
 
