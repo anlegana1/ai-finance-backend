@@ -12,3 +12,4 @@ pytesseract
 langchain
 langchain-openai
 opencv-python-headless
+alembic

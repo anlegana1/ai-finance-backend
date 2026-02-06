@@ -787,6 +787,21 @@ DATABASE_URL=postgresql://user:password@localhost/financedb
 pip install psycopg2-binary
 ```
 
+### Database migrations (Alembic)
+
+This backend supports Alembic migrations for production databases (e.g. Supabase Postgres). This is required because `SQLModel.metadata.create_all()` does not alter existing tables.
+
+**Run migrations locally:**
+```bash
+alembic upgrade head
+```
+
+**Render start command (recommended):**
+Run migrations before starting the API server:
+```bash
+alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
 ### Deploying to Render
 
 This project uses a `packages.txt` file (in repository root) to install system dependencies on Render.
