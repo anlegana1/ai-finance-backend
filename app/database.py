@@ -34,4 +34,18 @@ def get_session():
 def init_db():
     from .models import user, expense 
 
+    # Lightweight migration for SQLite: add users.default_currency if missing.
+    try:
+        if settings.database_url.startswith("sqlite"):
+            with engine.connect() as conn:
+                cols = conn.exec_driver_sql("PRAGMA table_info('users');").fetchall()
+                col_names = {row[1] for row in cols}  # row[1] is the column name
+                if "default_currency" not in col_names:
+                    conn.exec_driver_sql(
+                        "ALTER TABLE users ADD COLUMN default_currency TEXT NOT NULL DEFAULT 'CAD'"
+                    )
+    except Exception:
+        # Best-effort migration; avoid blocking app startup if DB is locked.
+        pass
+
     SQLModel.metadata.create_all(engine)

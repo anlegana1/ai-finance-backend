@@ -22,11 +22,13 @@ router = APIRouter(
 class RegisterIn(SQLModel):
     email: EmailStr = Field(index=False)
     password: str = Field(min_length=6)
+    default_currency: str = Field(default="CAD", min_length=3, max_length=3, regex="^[A-Z]{3}$")
 
 
 class UserRead(SQLModel):
     id: uuid.UUID
     email: str
+    default_currency: str
     created_at: datetime
     updated_at: datetime
 
@@ -55,10 +57,17 @@ def register_user(
         )
 
     now = datetime.utcnow()
+    currency = (payload.default_currency or "CAD").strip().upper()
+    if currency not in {"CAD", "USD", "COP"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid default_currency",
+        )
     user = User(
         id=uuid.uuid4(),
         email=email_norm,
         hashed_password=hash_password(payload.password),
+        default_currency=currency,
         created_at=now,
         updated_at=now,
         deleted_at=None,
@@ -70,6 +79,7 @@ def register_user(
     return UserRead(
         id=user.id,
         email=user.email,
+        default_currency=user.default_currency,
         created_at=user.created_at,
         updated_at=user.updated_at,
     )
@@ -121,7 +131,13 @@ def login(payload: LoginIn, response: Response, session: Session = Depends(get_s
         path="/",
     )
 
-    return UserRead(id=user.id, email=user.email, created_at=user.created_at, updated_at=user.updated_at)
+    return UserRead(
+        id=user.id,
+        email=user.email,
+        default_currency=user.default_currency,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
 
 
 @router.get(
@@ -133,6 +149,7 @@ def me(current_user: User = Depends(get_current_user)):
     return UserRead(
         id=current_user.id,
         email=current_user.email,
+        default_currency=current_user.default_currency,
         created_at=current_user.created_at,
         updated_at=current_user.updated_at,
     )

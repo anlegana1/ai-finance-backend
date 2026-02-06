@@ -12,6 +12,7 @@ REST API for intelligent expense management with JWT authentication, OCR receipt
 - 📊 **Full CRUD** - Complete expense management per user
 - 🔍 **Validation** - Pydantic data validation
 - 📝 **Auto Docs** - Swagger UI and ReDoc included
+- 💱 **User Default Currency** - Per-user `default_currency` preference returned by auth endpoints
 
 ---
 
@@ -154,6 +155,7 @@ Data structure definition with automatic validation:
 - Unique ID (UUID)
 - Email (unique, indexed)
 - Hashed password (bcrypt)
+- Default currency (`default_currency`: CAD/USD/COP)
 - Timestamps (created_at, updated_at)
 - Soft-delete (deleted_at)
 
@@ -198,6 +200,7 @@ Cross-cutting functionalities:
 - SQLModel engine configured for SQLite
 - `get_session()` - Dependency injection
 - `init_db()` - Automatic table creation
+- `init_db()` - Lightweight SQLite migration for `users.default_currency` (adds the column if missing)
 
 #### 5. **LangChain Integration** (`app/routers/receipts.py`)
 
@@ -426,7 +429,8 @@ Creates new user account.
 ```json
 {
   "email": "user@example.com",
-  "password": "securepass123"
+  "password": "securepass123",
+  "default_currency": "CAD"
 }
 ```
 
@@ -435,6 +439,7 @@ Creates new user account.
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "email": "user@example.com",
+  "default_currency": "CAD",
   "created_at": "2026-02-03T20:00:00",
   "updated_at": "2026-02-03T20:00:00"
 }
@@ -462,6 +467,7 @@ Login and set an HttpOnly cookie (no token is returned in the JSON response).
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "email": "user@example.com",
+  "default_currency": "CAD",
   "created_at": "2026-02-03T20:00:00",
   "updated_at": "2026-02-03T20:00:00"
 }
@@ -483,6 +489,7 @@ Returns the current authenticated user (used by the frontend to confirm session 
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "email": "user@example.com",
+  "default_currency": "CAD",
   "created_at": "2026-02-03T20:00:00",
   "updated_at": "2026-02-03T20:00:00"
 }
@@ -695,6 +702,7 @@ User:
   - id: UUID (PK)
   - email: String (unique, indexed)
   - hashed_password: String
+  - default_currency: String (CAD/USD/COP)
   - created_at: DateTime
   - updated_at: DateTime
   - deleted_at: DateTime (nullable, soft-delete)
@@ -755,6 +763,20 @@ For better results:
 - Legible and focused text
 - Receipts without wrinkles or stains
 - Minimum recommended resolution: 1000x1000px
+
+#### Local OCR parsing (regex) strategies
+The receipt OCR pipeline includes a local parsing step that tries multiple regex-based strategies and filters out common noise lines (totals, taxes, tips, etc.):
+
+- **Strategy 1: amount-at-end lines**
+  Matches lines where the amount appears at the end, e.g. `"Shawarma MIXTO 27.00"`.
+
+- **Strategy 2: qty-at-start lines**
+  Matches lines where a quantity appears at the start, e.g. `"2 Coca Cola 6.00"`.
+
+- **Strategy 3: global fallback scan**
+  If line parsing is weak, performs a broader scan across the full OCR text to recover additional items.
+
+This local parsing output is then combined, deduped, and sent through AI categorization.
 
 ### Switch to PostgreSQL
 ```python

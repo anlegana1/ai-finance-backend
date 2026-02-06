@@ -12,6 +12,8 @@ class User(SQLModel, table=True):
     email: str = Field(index=True, unique=True)
     hashed_password: str
 
+    default_currency: str = Field(default="CAD", min_length=3, max_length=3, regex="^[A-Z]{3}$")
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     deleted_at: Optional[datetime] = Field(default=None)
