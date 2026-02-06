@@ -217,36 +217,114 @@ def _parse_receipt_with_llm(ocr_text: str) -> List[ReceiptExpenseItem]:
 def _parse_receipt_locally(ocr_text: str) -> List[ReceiptExpenseItem]:
     text = ocr_text.replace("\u00a0", " ")
 
-    pattern = re.compile(
-        r"\b(\d+)\s+([A-Za-z0-9\-\_ ]{3,}?)\s*(\d{1,4})\s*[\,\.\s]\s*(\d{2})\b"
-    )
+    def _norm_line(s: str) -> str:
+        return " ".join((s or "").strip().split())
 
-    items: List[ReceiptExpenseItem] = []
-    for match in pattern.finditer(text):
-        _qty_s, desc_raw, amount_int_s, amount_dec_s = match.groups()
-        desc = " ".join(desc_raw.strip().split())
-        if not desc:
-            continue
-
+    def _to_amount(amt_s: str) -> Optional[float]:
+        s = (amt_s or "").strip()
+        s = s.replace("$", "").replace(" ", "").replace(",", ".")
         try:
-            amount = float(f"{int(amount_int_s)}.{int(amount_dec_s):02d}")
+            v = float(s)
         except Exception:
-            continue
+            return None
+        if v <= 0:
+            return None
+        return v
 
-        if amount <= 0:
-            continue
+    def _type1_amount_at_end(full_text: str) -> List[ReceiptExpenseItem]:
+        amount_last = re.compile(r"^\s*(?P<desc>.+?)\s+\$?(?P<amt>\d{1,6}[\,\.]\d{2})\s*$")
+        trailing_qty = re.compile(r"\s*(?:x|×)\s*\d{1,3}\s*$", re.IGNORECASE)
 
-        items.append(
-            ReceiptExpenseItem(
-                amount=amount,
-                currency="CAD",
-                description=desc,
-                category="OTHER",
-                expense_date=None,
+        out: List[ReceiptExpenseItem] = []
+        for raw_line in full_text.splitlines():
+            line = _norm_line(raw_line)
+            if not line:
+                continue
+            m = amount_last.match(line)
+            if not m:
+                continue
+            desc = _norm_line(m.group("desc") or "")
+            desc = trailing_qty.sub("", desc).strip()
+            amount = _to_amount(m.group("amt") or "")
+            if not desc or amount is None:
+                continue
+            out.append(
+                ReceiptExpenseItem(
+                    amount=amount,
+                    currency="CAD",
+                    description=desc,
+                    category="OTHER",
+                    expense_date=None,
+                )
             )
+        return out
+
+    def _type2_qty_first_global(full_text: str) -> List[ReceiptExpenseItem]:
+        pattern = re.compile(
+            r"\b(\d+)\s+([A-Za-z0-9\-\_ ]{3,}?)\s*(\d{1,4})\s*[\,\.\s]\s*(\d{2})\b"
         )
 
-    return items
+        out: List[ReceiptExpenseItem] = []
+        for match in pattern.finditer(full_text):
+            _qty_s, desc_raw, amount_int_s, amount_dec_s = match.groups()
+            desc = " ".join(desc_raw.strip().split())
+            if not desc:
+                continue
+            try:
+                amount = float(f"{int(amount_int_s)}.{int(amount_dec_s):02d}")
+            except Exception:
+                continue
+            if amount <= 0:
+                continue
+            out.append(
+                ReceiptExpenseItem(
+                    amount=amount,
+                    currency="CAD",
+                    description=desc,
+                    category="OTHER",
+                    expense_date=None,
+                )
+            )
+        return out
+
+    def _fallback_conservative(full_text: str) -> List[ReceiptExpenseItem]:
+        amount_last_any = re.compile(
+            r"^\s*(?P<desc>(?=.*[A-Za-zÀ-ÿ]).+?)\s+\$?(?P<amt>\d{1,6}[\,\.]\d{2})\s*$"
+        )
+
+        out: List[ReceiptExpenseItem] = []
+        for raw_line in full_text.splitlines():
+            line = _norm_line(raw_line)
+            if not line:
+                continue
+            m = amount_last_any.match(line)
+            if not m:
+                continue
+            desc = _norm_line(m.group("desc") or "")
+            amount = _to_amount(m.group("amt") or "")
+            if not desc or amount is None:
+                continue
+            out.append(
+                ReceiptExpenseItem(
+                    amount=amount,
+                    currency="CAD",
+                    description=desc,
+                    category="OTHER",
+                    expense_date=None,
+                )
+            )
+        return out
+
+    combined: List[ReceiptExpenseItem] = []
+    seen = set()
+    for item in _type2_qty_first_global(text) + _type1_amount_at_end(text) + _fallback_conservative(text):
+        key = (item.description.strip().lower(), round(float(item.amount), 2))
+        if key in seen:
+            continue
+        seen.add(key)
+        combined.append(item)
+
+    return combined
 
 
 def _classify_categories(descriptions: List[str]) -> dict:
