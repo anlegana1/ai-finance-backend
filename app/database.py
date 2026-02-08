@@ -32,7 +32,7 @@ def get_session():
 
 
 def init_db():
-    from .models import user, expense 
+    from .models import user, expense, budget 
 
     # Lightweight migration for SQLite: add users.default_currency if missing.
     try:
