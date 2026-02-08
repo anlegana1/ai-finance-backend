@@ -214,6 +214,77 @@ def _parse_receipt_with_llm(ocr_text: str) -> List[ReceiptExpenseItem]:
     return items
 
 
+def _parse_receipt_with_llm_from_image(image_path: Path) -> List[ReceiptExpenseItem]:
+    """Use vision model to extract items directly from image (no OCR)."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Missing OPENAI_API_KEY",
+        )
+
+    try:
+        import base64
+        from langchain_openai import ChatOpenAI
+        from langchain_core.prompts import ChatPromptTemplate
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLM dependencies missing. Install 'langchain' and 'langchain-openai'.",
+        )
+
+    # Read and encode image
+    with open(image_path, "rb") as f:
+        image_data = f.read()
+    image_b64 = base64.b64encode(image_data).decode()
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You extract expenses from receipt images. Return only valid JSON. Do not include markdown."),
+        ("human", [
+            {"type": "text", "text": "Extract all line-item expenses from this receipt image. Output ONLY a JSON array ([]) of objects with fields: amount, currency, description, category, expense_date. Rules: amount must be a positive number; currency must be 3-letter uppercase if present else CAD; category should be one of: FOOD, GROCERIES, TRANSPORT, ENTERTAINMENT, HEALTH, UTILITIES, RENT, OTHER; expense_date must be YYYY-MM-DD if present else null. If you cannot find any expenses, return an empty JSON array []"},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+        ])
+    ])
+
+    llm = ChatOpenAI(
+        model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+        temperature=0,
+        api_key=api_key,
+    )
+
+    try:
+        result = llm.invoke(prompt.format_messages())
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"LLM call failed: {e}")
+
+    content = getattr(result, "content", None)
+    if not content or not isinstance(content, str):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="LLM returned empty response")
+
+    try:
+        import json
+        data = json.loads(content)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to parse LLM output: {e}")
+
+    if data is None:
+        return []
+
+    if isinstance(data, dict):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="LLM output must be a JSON array, got object",
+        )
+    if not isinstance(data, list):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="LLM output must be a JSON array",
+        )
+
+    items = [ReceiptExpenseItem(**x) for x in data]
+    return items
+
+
 def _parse_receipt_locally(ocr_text: str) -> List[ReceiptExpenseItem]:
     text = ocr_text.replace("\u00a0", " ")
 
@@ -435,18 +506,20 @@ def process_receipt(
 
     receipt_path = str(save_path.as_posix())
 
-    ocr_text = _ocr_image(save_path)
-    try:
-        ocr_lines = [ln for ln in (ocr_text or "").splitlines() if ln.strip()]
-        print("=== DEBUG: OCR TEXT STATS ===")
-        print(f"ocr_len={len(ocr_text or '')} nonempty_lines={len(ocr_lines)}")
-        preview = (ocr_text or "").replace("\r", "")[:600]
-        print("ocr_preview_start=\n" + preview)
-        print("=== DEBUG: OCR TEXT STATS END ===")
-    except Exception as e:
-        print(f"=== DEBUG: OCR TEXT STATS FAILED: {e} ===")
+    # TODO: Replace OCR with vision model
+    # ocr_text = _ocr_image(save_path)
+    # try:
+    #     ocr_lines = [ln for ln in (ocr_text or "").splitlines() if ln.strip()]
+    #     print("=== DEBUG: OCR TEXT STATS ===")
+    #     print(f"ocr_len={len(ocr_text or '')} nonempty_lines={len(ocr_lines)}")
+    #     preview = (ocr_text or "").replace("\r", "")[:600]
+    #     print("ocr_preview_start=\n" + preview)
+    #     print("=== DEBUG: OCR TEXT STATS END ===")
+    # except Exception as e:
+    #     print(f"=== DEBUG: OCR TEXT STATS FAILED: {e} ===")
 
-    items = _parse_receipt_locally(ocr_text)
+    # items = _parse_receipt_locally(ocr_text)
+    items = _parse_receipt_with_llm_from_image(save_path)
     print(f"=== DEBUG: PARSED ITEMS COUNT: {len(items)} ===")
     category_map = _classify_categories([i.description for i in items])
     for item in items:
@@ -532,7 +605,7 @@ def process_receipt(
     #
     # return ReceiptProcessOut(receipt_path=receipt_path, ocr_text=ocr_text, expenses_created=created_out)
 
-    return ReceiptProcessOut(receipt_path=receipt_path, ocr_text=ocr_text, expenses_preview=preview_out)
+    return ReceiptProcessOut(receipt_path=receipt_path, ocr_text="", expenses_preview=preview_out)
 
 
 @router.post(
