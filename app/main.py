@@ -17,6 +17,7 @@ def create_app() -> FastAPI:
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "*"  # Permitir todos para UptimeRobot
     ]
     
     # Add production frontend URL if provided
@@ -39,6 +40,16 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    # Health endpoint sin CORS para UptimeRobot
+    from fastapi import Response
+    @app.options("/health")
+    def health_options():
+        return Response(status_code=200)
+
+    @app.head("/health")
+    def health_head():
+        return Response(status_code=200)
 
     app.include_router(expenses_router.router)
     app.include_router(auth_router.router)
